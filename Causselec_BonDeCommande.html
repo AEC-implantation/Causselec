@@ -166,6 +166,30 @@ body {
   flex: 1; font-size: 12px; color: var(--gris);
   line-height: 1.3;
 }
+.produit-nom-img {
+  cursor: pointer; text-decoration: underline dotted;
+}
+.produit-nom-img:hover { color: var(--rouge, #c00); }
+.img-modal {
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.75); align-items: center; justify-content: center;
+}
+.img-modal.open { display: flex; }
+.img-modal-content {
+  position: relative; max-width: 90vw; max-height: 90vh;
+  background: #fff; border-radius: 8px; padding: 16px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.img-modal-content img {
+  max-width: 100%; max-height: 75vh; object-fit: contain; border-radius: 4px;
+}
+.img-modal-caption {
+  margin-top: 10px; font-size: 13px; color: #333; text-align: center;
+}
+.img-modal-close {
+  position: absolute; top: 6px; right: 6px; border: none; background: #eee;
+  border-radius: 50%; width: 28px; height: 28px; font-size: 15px; cursor: pointer;
+}
 .produit-qty {
   width: 100px; border: 2px solid var(--border);
   border-radius: 6px; padding: 5px 8px;
@@ -7881,6 +7905,19 @@ const NB_CHANTIERS = 5;
 const NB_LIGNES_LIBRES = 5;
 const NB_LIGNES_HORS = 10;
 
+// ── Photos produits ──────────────────────────────────────────────────
+// Ajoute ici une entrée par produit ayant une photo : "Nom exact du produit": "URL de l'image"
+// Le nom doit correspondre EXACTEMENT au texte du produit dans RUBRIQUES ci-dessous.
+const IMAGES = {
+  "Cale de rebouchage PREFABOX descente 700522": "https://api.rexel.fr/dam/media/content/1/70147669/12805288?format=JUMBO_WEBP",
+  "Lampe DCLED 5W 480 lum 4000K 710250": "https://api.rexel.fr/media/api/fr/content/75059851/EXTRA_LARGE",
+  "Hublot 830022": "https://api.resistex-sa.com//media/images/products/favorite/830023__20260202_151033.webp",
+  "WBXPLP4-A-2-2-9-002 Pulsar Max 7.4 kW 5 M T2S - IP55 - IK10 - Wifi - BT - Garantie 5 ans": "https://api.rexel.fr/dam/media/content/1/75059834/47ebfdcc-570a-4179-8d41-38dd71142978?format=JUMBO_WEBP",
+  "MIHGE400 Totem ModulPark Start Gauche": "https://api.rexel.fr/dam/media/content/1/75442937/82740c1b-9132-49b6-a2ab-55f70efb5d7b?format=JUMBO_WEBP",
+  "MIHGE095 ParkTotem 7 équipement de base prise gauche": "https://api.rexel.fr/dam/media/content/1/73679607/10144593?format=JUMBO_WEBP",
+  "MIHGE100 Armoire PARKBOX 7 monophasée avec prise type 2S": "https://api.rexel.fr/dam/media/content/1/73491544/7711483?format=JUMBO_WEBP",
+};
+
 const RUBRIQUES = {
   "Dooxie": [
     "Prise Dooxie 600611","V/V Dooxie 600610","Double V/V Dooxie 600002",
@@ -7967,7 +8004,12 @@ const RUBRIQUES = {
     "Couvercle de pose 68 CAP853180 / BLI750860",
     "Distancier 85x100 CAP853360","Distancier 71x90 CAP853380",
     "Couvercle DCL simple CAP493220 / BLM601200",
-    "Douille DCL 710100","Piton 100 750192","Piton 145 750199"
+    "Douille DCL 710100","Piton 100 750192","Piton 145 750199",
+    "Kit finition Piton 100mm + couv. DCL D.120 795192",
+    "Kit finition Piton Lg.85mm + Couvercle DCL D.120 795100",
+    "Kit finition D120 Préd.74 Type C avec DAC 757400",
+    "Lampe DCLED 5W 480 lum 4000K 710250",
+    "Cale de rebouchage PREFABOX descente 700522"
   ],
   "Gaines": [
     "ICTA 20","ICTA25","ICTA32","ICTA40","ICTA50","ICTA63",
@@ -8217,8 +8259,12 @@ function buildChantierHTML(ci) {
     html += `<div class="rub-card-header">${rub}</div>`;
     prods.forEach((prod, pi) => {
       const qid = `qty-${ci}-${ri}-${pi}`;
+      const hasImg = IMAGES.hasOwnProperty(prod);
+      const nomAttrs = hasImg
+        ? ` class="produit-nom produit-nom-img" onclick="showProductImage('${escapeQ(prod)}')" title="Voir la photo"`
+        : ` class="produit-nom"`;
       html += `<div class="produit-row">
-        <span class="produit-nom">${prod}</span>
+        <span${nomAttrs}>${prod}${hasImg ? ' 📷' : ''}</span>
         <input type="text" class="produit-qty" id="${qid}" data-ci="${ci}" data-rub="${rub}" data-prod="${escapeQ(prod)}" min="0" placeholder="0">
       </div>`;
     });
@@ -8256,6 +8302,33 @@ function rubId(ci, rub) {
 }
 
 function escapeQ(s) { return s.replace(/'/g, "\\'"); }
+
+// ── Lightbox photo produit ───────────────────────────────────────────
+function showProductImage(prod) {
+  const url = IMAGES[prod];
+  if (!url) return;
+  let modal = document.getElementById('img-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'img-modal';
+    modal.className = 'img-modal';
+    modal.onclick = closeProductImage;
+    modal.innerHTML = `
+      <div class="img-modal-content" onclick="event.stopPropagation()">
+        <button class="img-modal-close" onclick="closeProductImage()">✕</button>
+        <img id="img-modal-photo" src="" alt="">
+        <div id="img-modal-caption" class="img-modal-caption"></div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('img-modal-photo').src = url;
+  document.getElementById('img-modal-caption').textContent = prod;
+  modal.classList.add('open');
+}
+function closeProductImage() {
+  const modal = document.getElementById('img-modal');
+  if (modal) modal.classList.remove('open');
+}
 
 // ── Navigation ────────────────────────────────────────────────────────
 
